@@ -16,7 +16,7 @@ print('YTest shape = ',YTest.shape)
  Number of  distinct vaLues of our NNZS T target 
  print('YTrain values = ', np. unique (YTrain)) 
  print('YTest values = ', np. unique (YTest))
-# Dis tribution of- c Lasses in our dataset.
+# Distribution of- c Lasses in our dataset.
 unique, counts = np. unique (YTrain, return_counts=True)
 print('YTrain distribution = ',dict (zip(unique, counts))) 
 unique, counts = np. unique (YTest, return_counts=True) 
@@ -25,7 +25,7 @@ print('YTest distribution = ',dict(zip(unique, counts)))
  
 ln[11]: XTrain = XTrain.astype('float32') / 255
 XTest  = XTest. astype( 'I-1oat32' )  /  255
-It data reshapp!ng.
+#data reshapp!ng.
 XTrain = XTrain.reshape((len(XTrain), np. prod (XTrain.shape[1:]))) 
 XTest=XTest.reshape((len(XTest), np.prod(XTest.shape[1:])))
 print (XTrain.shape) 
@@ -36,7 +36,7 @@ ln[15]:InputModel = Input (shape=(784,))
 EncodedLayer =Dense(32, activation='relu')(InputModel) 
 DecodedLayer = Dense(784, activation='sigmoid') (EncodedLayer) 
 AutoencoderModel = Model (InputModel, DecodedLayer)
-# we can sufflrnarize our nodeL.
+# we can summarize our nodeL.
 AutoencoderMode1.summary()
 
 ln[19]:AutoencoderModel.compile(optimizer='adam', loss=' binary crossentropy') 
@@ -55,6 +55,6 @@ plt.xlabel('Epoch')
 plt.legend (['Train', 'Test'], loc='upper left') 
 plt.show()
 # List all data in history 
-pr1nt  ( history. history. keys ( ) )
+print  ( history. history. keys ( ) )
 #visualiation of loss minimiation during the training process 
 plotmodelhistory (history)
