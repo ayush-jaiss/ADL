@@ -58,3 +58,21 @@ plt.show()
 print  ( history. history. keys ( ) )
 #visualiation of loss minimiation during the training process 
 plotmodelhistory (history)
+
+
+n=5
+plt.figure(figsize=(20, 4))
+for i in range(n):
+ax = plt.subplot(2, n, i + 1) 
+#input image 
+plt.imshow(XTest[i+10].reshape(28, 28))
+plt.gray() ax.get_xaxis().set_visible(False) 
+ax.get_yaxis().set_visible(False)
+ax = plt.subplot(2, n, i + 1 + n)
+plt.imshow(DecodedDigits[i+10].reshape(28, 28)) 
+plt.gray()
+ax.get_xaxis().set_visible(False)
+ax.get_yaxis().set_visible(False)
+plt.show()
+
+
