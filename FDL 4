@@ -1,0 +1,261 @@
+import cv2
+import pandas
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow import keras
+from sklearn.model_selection import RandomizedSearchCV, KFold, train_test_split
+
+
+import os
+from PIL import Image
+from keras.preprocessing.image import img_to_array
+
+tumor = [('glioma_tumor', 0),('meningioma_tumor', 1),('no_tumor', 2),('pituitary_tumor', 3)]
+path1 = '../input/brain-tumor-classification-mri/Training/'
+path2 = '../input/brain-tumor-classification-mri/Testing/'
+
+
+Path = [
+    '../input/brain-tumor-classification-mri/Training/glioma_tumor/gg (104).jpg'  ,
+    '../input/brain-tumor-classification-mri/Training/meningioma_tumor/m (10).jpg',
+    '../input/brain-tumor-classification-mri/Training/no_tumor/image (12).jpg'    ,
+    '../input/brain-tumor-classification-mri/Training/pituitary_tumor/p (122).jpg',
+]
+
+
+def display (img_array) :
+    
+    dim = 10
+    
+    plt.figure(figsize  = (dim , dim))
+    for i, img in enumerate(img_array) :
+        plt.subplot(2, 2, i+1)
+        plt.imshow(img,'gray')
+        plt.title(img.shape)
+        
+    plt.show()
+
+
+def get_array (path) :
+    
+    X = []
+    y = []
+    
+    for typ, val in tumor :
+        for image in os.listdir(path+typ) :
+            img = cv2.resize(cv2.imread(path+typ+'/'+image, cv2.IMREAD_GRAYSCALE), (200,200))
+            
+            # create arrays
+            X.append(img_to_array( Image.fromarray(img)))
+            y.append(val)
+    return X, y
+
+
+image_array = []
+for i, image_path in enumerate(Path) :
+    image_array.append(cv2.resize(cv2.imread(image_path, cv2.IMREAD_GRAYSCALE), (200,200)))
+
+display(image_array)
+
+X_train, y_train = get_array(path1)
+X_test , y_test  = get_array(path2)
+
+X_train, X_test = np.array(X_train), np.array(X_test)
+y_train, y_test = np.array(y_train), np.array(y_test)
+
+X_train = np.array(X_train)
+X_train/= 255.0
+
+y_train = np.array(keras.utils.to_categorical(y_train))
+
+X_test = np.array(X_test)
+X_test/= 255.0
+
+y_test = np.array(keras.utils.to_categorical(y_test))
+
+print(X_train.shape)
+print(y_train.shape)
+
+print(X_test.shape)
+print(y_test.shape)
+
+info = {0 : 'Glioma tumor', 1 : 'Meningioma tumor', 2 : 'No tumor', 3 : 'Pituitary tumor'}
+
+
+plt.figure(figsize = (12,12))
+for i in range(16) :
+    plt.subplot(4, 4, i+1)
+    x = np.random.randint(0, 2870)
+    plt.imshow(X_train[x], 'gray')
+    plt.title(info[np.argmax(y_train[x])])
+    plt.axis('off')
+plt.show()
+
+
+plt.hist(np.argmax(y_train, axis = 1))
+plt.show()
+
+
+print(X_train.shape)
+print(y_train.shape)
+
+
+X_train = np.reshape(X_train, (2870, 200*200*1))
+print(X_train.shape)
+print(y_train.shape)
+
+
+from imblearn.over_sampling import SMOTE
+X_train, y_train = SMOTE(sampling_strategy = 'auto', random_state = 1, k_neighbors = 5).fit_resample(X_train, y_train)
+
+
+print(X_train.shape)
+print(y_train.shape)
+
+
+X_train = np.reshape(X_train, (3308, 200, 200, 1))
+print(X_train.shape)
+print(y_train.shape)
+
+
+
+plt.figure(figsize = (12,12))
+for i in range(16) :
+    plt.subplot(4, 4, i+1)
+    x = np.random.randint(2870, 3308)
+    plt.imshow(X_train[x], 'gray')
+    plt.title(info[np.argmax(y_train[x])])
+    plt.axis('off')
+plt.show()
+
+
+plt.hist(np.argmax(y_train, axis = 1))
+plt.show()
+
+
+plt.figure(figsize = (12,12))
+for i in range(16) :
+    plt.subplot(4, 4, i+1)
+    x = np.random.randint(0,390)
+    plt.imshow(X_test[x],'gray')
+    plt.title(info[np.argmax(y_test[x])])
+    plt.axis('off')
+plt.show()
+
+
+from keras.layers import Input
+from keras.layers import Dense
+from keras.layers import Flatten
+from keras.models import Sequential
+from keras.layers import BatchNormalization
+from keras.layers import MaxPooling2D
+from keras.layers import Dropout
+from keras.layers import Conv2D
+
+
+def conv_layer (filterx) :
+    
+    model = Sequential()
+    model.add(Conv2D(filterx, (3,3), padding = 'same', activation = 'relu'))
+    model.add(MaxPooling2D(pool_size = (2,2), padding = 'valid'))
+    model.add(BatchNormalization())
+    
+    return model
+
+
+def dens_layer (hiddenx) :
+    
+    model = Sequential()
+    model.add(Dense(hiddenx, activation = 'relu', kernel_regularizer = 'l2'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.2))
+    
+    return model
+
+
+def cnn (filter1, filter2, filter3, hidden1, hidden2) :
+    
+    model = Sequential()
+    
+    model.add(Input((200,200,1,)))
+    model.add(conv_layer(filter1))
+    model.add(conv_layer(filter2))
+    model.add(conv_layer(filter3))
+    
+    model.add(Flatten())
+    model.add(dens_layer(hidden1))
+    model.add(dens_layer(hidden2))
+    model.add(Dense(4, activation = 'softmax'))
+    model.compile(loss = 'categorical_crossentropy', optimizer = keras.optimizers.Adam(learning_rate = 0.0001), metrics = ['accuracy'])
+    
+    return model
+
+
+print(X_train.shape)
+print(y_train.shape)
+
+
+from keras.preprocessing.image import ImageDataGenerator
+gen = ImageDataGenerator(zoom_range = [0.85, 1.0], rotation_range = 3)
+
+
+gen.fit(X_train)
+train_gen = gen.flow(X_train, y_train, batch_size = 32)
+
+trainX, trainy = train_gen.next()
+
+
+plt.figure(figsize = (12,12))
+for i in range(16) :
+    plt.subplot(4, 4, i+1)
+    plt.imshow(trainX[i], 'gray')
+    plt.title(info[np.argmax(trainy[i])])
+    plt.axis('off')
+plt.show()
+
+
+from keras.callbacks import ModelCheckpoint
+checkp = ModelCheckpoint('./brain_model.h5', monitor = 'val_accuracy', save_best_only = True, verbose = 1)
+
+
+model = cnn(128, 64, 32, 128, 64)
+print(model.summary())
+history = model.fit(gen.flow(X_train, y_train, batch_size = 32), epochs = 100, validation_data = (X_test,y_test), callbacks = [checkp])
+
+plt.figure(figsize = (20,7))
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.legend(['training loss', 'validation loss'])
+plt.xlabel('Epochs')
+plt.ylabel('Losses')
+plt.title('Loss vs Epochs', fontsize = 15)
+
+
+plt.figure(figsize = (20,7))
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.legend(['training accuracy', 'validation accuracy'])
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.title('Accuracy vs Epochs', fontsize = 15)
+
+
+from keras.models import load_model
+model = load_model('./brain_model.h5')
+
+pred = model.predict(X_test)
+print(pred[0:3,:])
+
+
+temp = np.argmax(pred, axis = 1)
+pred = np.zeros(pred.shape)
+
+pred[np.arange(pred.shape[0]), temp] = 1
+
+print(pred[0:3,:])
+print(y_test[0:3,:])
+
+
+from sklearn.metrics import accuracy_score, classification_report
+print('Accuracy : ' + str(accuracy_score(y_test, pred)))
+print(classification_report(y_test, pred, target_names = ['glioma_tumor', 'meningioma_tumor', 'no_tumor', 'pituitary_tumor']))
