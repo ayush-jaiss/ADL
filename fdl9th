@@ -1,0 +1,232 @@
+from math import sqrt
+from numpy import concatenate 
+from matplotlib import pyplot 
+from pandas import read_csv 
+from pandas import DataFrame 
+from pandas import concat
+from sklearn.preprocessing import MinMaxScaler 
+from sklearn.preprocessing import LabelEncoder 
+from sklearn.metrics import mean_squared_error 
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import LSTM 
+import pandas as pd
+import numpy as np
+
+
+df_t= pd.read_csv('temperature.csv', index_col=0)
+df_h= pd.read_csv('humidity.csv', index_col=0)
+df_p = pd.read_csv('pressure.csv', index_col=0) 
+df_w = pd.read_csv('wind_speed.csv', index_col=0)
+df_h.columns
+
+
+def normalize(data):
+    data_mean = data.mean (axis=0)
+    data_std = data.std (axis=0)
+    return (data - data_mean) / data_std
+
+
+city = 'San Diego'
+tempog = df_t[city]
+temp = df_t[city].rename("temperature").to_frame(name='temperature') 
+humid = df_h[city].rename("humidity").to_frame (name='humidity') 
+press = df_p[city].rename("presure").to_frame (name='presure') 
+wind = df_w[city].rename("wind").to_frame (name='wind')
+features = pd.concat([temp, press, humid, wind], axis=1)
+#features. index -time
+features = features.dropna()
+features
+featuresog = features 
+featuresog
+
+
+features = normalize(features.values) 
+features= pd.DataFrame (features) 
+features
+
+
+training_size = int(0.8 * features.shape[0]) 
+train_data = features.loc[0: training_size - 1] 
+val_data = features.loc[training_size:]
+
+
+start = 432 + 36
+end = start + training_size
+x_train = train_data.values
+y_train = features.iloc[start:end][[0]]
+sequence_length = int(432 / 6)
+
+
+from tensorflow import keras
+dataset_train = keras. preprocessing.timeseries_dataset_from_array(
+    data=x_train,
+    targets  =y_train,
+    sequence_length=sequence_length,
+    sampling_rate=6,
+    batch_size=64,
+)
+
+
+x_val_end = len(val_data) - start
+label_start = training_size + start
+x_val = val_data.iloc[:x_val_end] [[i for i in range(4)]].values
+y_val = features.iloc[label_start:][[0]]
+dataset_val = keras.preprocessing.timeseries_dataset_from_array(
+    x_val,
+    y_val,
+    sequence_length=sequence_length,
+    sampling_rate=6,
+    batch_size=64,
+)
+
+
+for batch in dataset_train. take (1): 
+    inputs, targets = batch
+inputs = keras.layers.Input(shape=(inputs.shape[1], inputs.shape[2])) 
+lstm_out = keras.layers.LSTM(32)(inputs)
+outputs = keras.layers.Dense (1)(lstm_out)
+model = keras.Model (name="Weather_forcaster", inputs=inputs, outputs = outputs) 
+model.compile(optimizer = keras.optimizers.Adam (learning_rate=0.001), loss="mse") 
+model. summary()
+
+
+history = model.fit(
+    dataset_train,
+    epochs=10,
+    validation_data=dataset_val
+)
+
+
+import matplotlib.pyplot as plt
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss']) 
+plt.title('Model loss') 
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend (['training', 'validation'], loc='upper right') 
+plt.show()
+
+
+dataset = featuresog.values
+dataset = dataset.astype('float32')
+scaler = MinMaxScaler (feature_range=(0, 1))
+dataset = scaler.fit_transform(dataset)
+#print('dataset. shape', dataset.shape) 
+num_of_features = len(features.columns) 
+print('Number of features', num_of_features)
+look_back = sequence_length
+
+
+train_size_percent= 0.80
+pred_col = featuresog.columns.get_loc("temperature") 
+print(pred_col)
+#function to split the data
+def create_dataset(dataset, pred_col, look_back=1): 
+    dataX, dataY = [], []
+    for i in range(len(dataset)-look_back-1):
+        a = dataset [i: (i+look_back), :]
+        dataX.append(a)
+        dataY.append(dataset [i + look_back, pred_col]) 
+    return np.array(dataX), np.array(dataY)
+        train_size = int(len(dataset) * train_size_percent) 
+test_size = len(dataset) - train_size
+train, test = dataset [0: train_size, :], dataset [train_size: len(dataset), :]
+trainX, trainY = create_dataset (train, pred_col, look_back=look_back) 
+testX, testY = create_dataset (test, pred_col, look_back=look_back)
+# reshape input to be [samples, time steps, features]
+trainX = np.reshape(trainX, (trainX.shape[0], look_back, num_of_features)) 
+testX = np.reshape(testX, (testX. shape[0], look_back, num_of_features))
+print('Training dataset length', len(train)) 
+print('Testing dataset length ', len(test)) 
+print('look_back', look_back)
+
+
+expr_name = 'expr_4'
+# Look_back = 24*120 # 60 days, as each entry is for 1 hour
+lstm_layers = 64 # 64
+epochs = 6 #6
+batch_size = 128 #128
+
+model = Sequential()
+model.add(LSTM(lstm_layers, input_shape=(look_back,num_of_features)))
+model.add(Dense(1))
+model.compile(loss='mean_squared_error', optimizer='adam')
+history= model.fit(trainX,trainY,validation_split=0.30, epochs=epochs, batch_size=batch_size, shuffle=False)
+
+
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('Model loss')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend (['training', 'validation'], loc='upper right') 
+plt.show()
+
+
+import math
+trainPredict = model.predict(trainX)
+testPredict = model.predict(testX)
+
+#Get something which has as many features as dataset 
+trainPredict_extended = np.zeros((len(trainPredict), num_of_features)) 
+#Put the predictions there
+trainPredict_extended[:, pred_col] = trainPredict[:,0]
+#Inverse transform it and select the 3rd column.
+trainPredict = scaler.inverse_transform(trainPredict_extended) [:,pred_col]
+
+#Get something which has as many features as dataset
+testPredict_extended = np.zeros((len(testPredict), num_of_features))
+#Put the predictions there 
+testPredict_extended[:,pred_col] = testPredict[:,0]
+#Inverse transform it and select the pred_coL column.
+testPredict = scaler.inverse_transform(testPredict_extended)[:,pred_col]
+
+trainY_extended = np.zeros((len(trainY), num_of_features)) 
+trainY_extended[:, pred_col]=trainY
+trainY = scaler.inverse_transform(trainY_extended) [:, pred_col]
+
+testY_extended = np.zeros((len(testY), num_of_features)) 
+testY_extended[:, pred_col]-testY
+testY = scaler.inverse_transform(testY_extended) [:, pred_col]
+
+#calculate root mean squared error
+trainscore_RMSE = math.sqrt(mean_squared_error(trainY, trainPredict)) 
+testscore_RMSE = math.sqrt(mean_squared_error(testY, testPredict))
+
+#calculate absolute mean error
+trainScore_MAE= np.sum(np.absolute (trainY - trainPredict))/len(trainY)
+testScore_MAE= np.sum(np.absolute (testY - testPredict))/len (testY)
+
+#shift train predictions for plotting 
+trainPredictPlot = np.empty_like(dataset)
+trainPredictPlot[:, :]= np.nan
+trainPredictPlot[look_back: len(trainPredict)+look_back, pred_col] = trainPredict
+
+#shift test predictions for plotting 
+testPredictPlot = np.empty_like(dataset) 
+testPredictPlot[:, :]= np.nan
+testPredictPlot[len(trainPredict)+(look_back*2)+1:len(dataset)-1, pred_col] = testPredict
+
+#contruct pandas dataframe for plotting
+time_df = pd.DataFrame(featuresog.index)
+time_df['Actual'] = scaler.inverse_transform(dataset)[:, pred_col] 
+df1= pd.DataFrame (trainPredictPlot[:,pred_col], columns=['Train']) 
+df2= pd.DataFrame(testPredictPlot[:,pred_col], columns=['Test']) 
+time_df2= pd.concat([time_df, df1, df2], axis=1, sort=False)
+
+# print(time_df2)
+
+time_df2.set_index('datetime', inplace=True)
+
+
+print(trainscore_RMSE)
+print(testscore_RMSE)
+
+
+fig, ax = plt.subplots(figsize=(15,7)) 
+time_df2.plot(ax=ax, rot=90,alpha=0.7) 
+plt.xlabel('Timestamp')
+plt.ylabel('Temperature Value')
+plt.title('Temperature Prediction')
+plt.savefig(expr_name + '.png', bbox_inches = "tight")
